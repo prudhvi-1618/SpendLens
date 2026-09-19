@@ -19,7 +19,29 @@ graph TD
     FastAPI --> Agent
     Agent -- "AI Extraction" --> Gemini
     Gemini --> Agent
+    Agent -- "Save Results" --> DB
     Agent --> UI
+```
+
+## LangGraph Orchestration Workflow
+SpendLens uses LangGraph to orchestrate the email processing and intelligence generation pipeline.
+
+```mermaid
+graph TD
+    Start((Start Sync)) --> Fetch[fetch_emails]
+    Fetch --> Classify[classify_emails]
+    Classify --> Extract[extract_transactions]
+    Extract --> Validate[validate_transactions]
+    Validate --> Dedupe[deduplicate_transactions]
+    Dedupe --> Persist[persist_transactions]
+    
+    Persist --> Analyze[analyze_spending]
+    Persist --> Anomalies[detect_anomalies]
+    Persist --> Recurring[detect_recurring]
+    
+    Analyze --> End((Complete))
+    Anomalies --> End
+    Recurring --> End
 ```
 
 ## Tech stack table
