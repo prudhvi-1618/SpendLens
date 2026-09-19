@@ -22,7 +22,7 @@ async def generate_insights(state: SpendState) -> SpendState:
     }
     
     gemini_service = GeminiService()
-    llm = gemini_service.get_langchain_llm()
+    llm = gemini_service.get_openrouter_llm()
     
     prompt = f"""
     You are a financial analyst. Based on the following DETERMINISTIC analytics data for a user's recent spending, provide 3 to 5 concise insights.

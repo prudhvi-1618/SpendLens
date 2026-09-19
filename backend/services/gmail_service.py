@@ -73,6 +73,7 @@ class GmailService:
         months_back: int = 6,
         page_token: str | None = None,
         max_results: int = 200,
+        on_mail_found=None,
     ) -> tuple[list[dict], str | None]:
         query = self.build_financial_query(months_back)
         logger.info("Searching Gmail with query: %s", query)
@@ -123,6 +124,20 @@ class GmailService:
                         "received_at": received_at
                     }
                     emails.append(email)
+                    
+                    if on_mail_found:
+                        # Extract sender if possible, else default to Unknown
+                        sender_header = next((h["value"] for h in headers if h["name"].lower() == "from"), "Unknown")
+                        sender = sender_header.split("<")[0].strip() if "<" in sender_header else sender_header
+                        
+                        await on_mail_found({
+                            "id": msg_id,
+                            "subject": subject,
+                            "sender": sender,
+                            "date": received_at.isoformat() if hasattr(received_at, "isoformat") else str(received_at),
+                            "mail_link": f"https://mail.google.com/mail/u/0/#all/{msg_id}"
+                        })
+                        
                     logger.info(
                         "Fetched email %d/%d: id=%s subject=%r",
                         index,

@@ -4,6 +4,7 @@ import logging
 import warnings
 import google.generativeai as genai
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -77,5 +78,13 @@ class GeminiService:
         return ChatGoogleGenerativeAI(
             model="gemini-3.6-flash",
             google_api_key=os.environ.get("GEMINI_API_KEY"),
+            temperature=0.2
+        )
+
+    def get_openrouter_llm(self) -> ChatOpenAI:
+        return ChatOpenAI(
+            model="inclusionai/ling-3.0-flash-fin:free",
+            api_key=os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPEN_ROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
             temperature=0.2
         )

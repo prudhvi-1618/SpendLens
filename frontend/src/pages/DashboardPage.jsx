@@ -9,20 +9,33 @@ import SpendOverTimeChart from "../components/dashboard/SpendOverTimeChart";
 import TopMerchantsTable from "../components/dashboard/TopMerchantsTable";
 import RecurringPaymentsList from "../components/dashboard/RecurringPaymentsList";
 import AISummaryCard from "../components/dashboard/AISummaryCard";
+import { useEffect } from "react";
 import { useProfile } from "../hooks/useProfile";
-import { triggerEmailSync, triggerSync } from "../api/insights";
+import { useState } from "react";
+import SyncModal from "../components/dashboard/SyncModal";
+import { useSync } from "../context/SyncContext";
 
 export default function DashboardPage() {
   const { profile, loading, error, refetch } = useProfile();
+  
+  const { 
+    isSyncing, 
+    syncStatus, 
+    startSync, 
+    openDetailsModal
+  } = useSync();
 
-  const handleSync = async () => {
-    try {
-      await triggerEmailSync();
-      await triggerSync();
-      // Refetch will be triggered by Navbar sync state or user refresh
+  useEffect(() => {
+    if (syncStatus === "completed") {
       refetch();
-    } catch (err) {
-      console.error("Initial sync failed", err);
+    }
+  }, [syncStatus, refetch]);
+
+  const handleSyncClick = () => {
+    if (syncStatus === "idle" || syncStatus === "error") {
+      startSync();
+    } else {
+      openDetailsModal();
     }
   };
 
@@ -53,12 +66,14 @@ export default function DashboardPage() {
         <main className="h-[calc(100vh-4rem)] flex items-center justify-center">
           <EmptyState 
             icon={MailOpen}
-            title="No spending data yet"
-            description="Sync your Gmail to start analyzing your finances"
-            actionLabel="Sync Now"
-            onAction={handleSync}
+            title={isSyncing ? "Syncing your data..." : syncStatus === "completed" ? "Sync completed!" : "No spending data yet"}
+            description={isSyncing ? "We're currently extracting your transactions. This might take a minute." : syncStatus === "completed" ? "Refresh the page to see your insights." : "Sync your Gmail to start analyzing your finances"}
+            actionLabel={isSyncing ? "View Progress" : syncStatus === "completed" ? "View Results" : "Sync Now"}
+            onAction={handleSyncClick}
           />
         </main>
+        
+        <SyncModal />
       </div>
     );
   }
@@ -80,6 +95,7 @@ export default function DashboardPage() {
           <TopMerchantsTable byMerchant={profile.by_merchant} />
           <RecurringPaymentsList recurring={profile.recurring} />
         </div>
+        <SyncModal />
       </main>
     </div>
   );

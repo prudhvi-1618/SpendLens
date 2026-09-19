@@ -41,6 +41,7 @@ POSITIVE_RULES: tuple[Rule, ...] = (
     Rule("credited_back", r"\bcredited\s+back\b", 4, "refund"),
     Rule("invoice", r"\binvoice\b", 3, "financial_document"),
     Rule("receipt", r"\breceipt\b", 3, "financial_document"),
+    Rule("uber_trip", r"\b(your\s+)?(uber|zomato|swiggy|ola)\s+(trip|ride|order)\b", 4, "completed_transaction"),
     Rule("statement", r"\b(statement|bank\s+statement)\b", 3, "financial_document"),
     Rule("billing_document", r"\bbilling\b", 2, "financial_document"),
     Rule("subscription", r"\bsubscription\b", 2, "subscription"),
@@ -74,9 +75,9 @@ SENDER_RULES: tuple[Rule, ...] = (
 
 
 NEGATIVE_RULES: tuple[Rule, ...] = (
-    Rule("newsletter", r"\bnewsletter\b", -3, "negative"),
-    Rule("unsubscribe", r"\bunsubscribe\b", -2, "negative"),
-    Rule("promotion", r"\b(promotion|promotional|offer|sale|discount|coupon)\b", -2, "negative"),
+    Rule("newsletter", r"\bnewsletter\b", -2, "negative"),
+    Rule("unsubscribe", r"\bunsubscribe\b", -1, "negative"),
+    Rule("promotion", r"\b(promotion|promotional|offer|sale|discount|coupon)\b", -1, "negative"),
     Rule("blog", r"\b(blog|article|post)\b", -3, "negative"),
     Rule("webinar", r"\b(webinar|event|announcement)\b", -3, "negative"),
     Rule("community_digest", r"\b(community\s+update|digest)\b", -3, "negative"),

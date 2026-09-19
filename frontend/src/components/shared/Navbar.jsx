@@ -1,26 +1,29 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, CircleDot } from "lucide-react";
+import { Menu, X, CircleDot, Loader2, CheckCircle } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
-import { triggerEmailSync, triggerSync } from "../../api/insights";
-import LoadingSpinner from "./LoadingSpinner";
+import { useSync } from "../../context/SyncContext";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  
+  const { 
+    isSyncing, 
+    syncStatus, 
+    startSync, 
+    openDetailsModal, 
+    totalMailsProcessed 
+  } = useSync();
 
-  const handleSync = async () => {
-    setIsSyncing(true);
-    try {
-      await triggerEmailSync();
-      await triggerSync();
-    } catch (error) {
-      console.error("Sync failed:", error);
-    } finally {
-      setIsSyncing(false);
+  const handleSyncClick = () => {
+    if (syncStatus === "idle" || syncStatus === "error") {
+      startSync();
+    } else {
+      openDetailsModal();
     }
+    setIsMobileMenuOpen(false);
   };
 
   const navLinks = [
@@ -65,14 +68,24 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-4">
             <span className="text-sm text-slate-400">{user?.email}</span>
             <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              onClick={handleSyncClick}
+              className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
+                syncStatus === "completed" 
+                  ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                  : isSyncing 
+                    ? "bg-slate-800 text-slate-300 hover:bg-slate-700" 
+                    : "bg-indigo-600 hover:bg-indigo-500 text-white"
+              }`}
             >
               {isSyncing ? (
                 <>
-                  <LoadingSpinner size="sm" />
-                  <span>Syncing…</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : syncStatus === "completed" ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  <span>{totalMailsProcessed} processed</span>
                 </>
               ) : (
                 <span>Sync Now</span>
@@ -120,17 +133,24 @@ export default function Navbar() {
             <div className="mt-4 pt-4 border-t border-slate-800 space-y-4 px-3">
               <div className="text-sm text-slate-400 truncate">{user?.email}</div>
               <button
-                onClick={() => {
-                  handleSync();
-                  setIsMobileMenuOpen(false);
-                }}
-                disabled={isSyncing}
-                className="w-full flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium px-4 py-2 rounded-lg"
+                onClick={handleSyncClick}
+                className={`w-full flex justify-center items-center gap-2 font-medium px-4 py-2 rounded-lg ${
+                  syncStatus === "completed" 
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : isSyncing 
+                      ? "bg-slate-800 text-slate-300" 
+                      : "bg-indigo-600 hover:bg-indigo-500 text-white"
+                }`}
               >
                 {isSyncing ? (
                   <>
-                    <LoadingSpinner size="sm" />
-                    <span>Syncing…</span>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : syncStatus === "completed" ? (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    <span>View Results</span>
                   </>
                 ) : (
                   <span>Sync Now</span>
@@ -146,6 +166,7 @@ export default function Navbar() {
           </div>
         </div>
       )}
+      
     </nav>
   );
 }

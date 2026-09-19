@@ -1,4 +1,5 @@
 from datetime import timedelta
+import uuid
 from app.graph.state import SpendState
 from database import AsyncSessionLocal
 from models import Transaction
@@ -9,6 +10,7 @@ async def detect_recurring(state: SpendState) -> SpendState:
     Deterministic detection of recurring payments.
     """
     user_id = state.get("user_id")
+    uid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
     recurring_payments = []
     
     async with AsyncSessionLocal() as session:
@@ -16,9 +18,8 @@ async def detect_recurring(state: SpendState) -> SpendState:
         query = await session.execute(
             select(Transaction)
             .where(
-                Transaction.user_id == user_id,
-                Transaction.transaction_type.in_(["subscription", "bill", "payment"]),
-                Transaction.status == "completed"
+                Transaction.user_id == uid,
+                Transaction.flagged == False
             )
             .order_by(Transaction.merchant, Transaction.date.desc())
         )
@@ -34,7 +35,7 @@ async def detect_recurring(state: SpendState) -> SpendState:
         merchant_groups[tx.merchant].append(tx)
         
     for merchant, txs in merchant_groups.items():
-        is_explicit_subscription = any(tx.transaction_type == "subscription" for tx in txs)
+        is_explicit_subscription = any(tx.category and tx.category.lower() == "subscription" for tx in txs)
         min_tx = 2 if is_explicit_subscription else 3
         
         if len(txs) >= min_tx:

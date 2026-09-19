@@ -1,6 +1,9 @@
 import logging
+import asyncio
+import json
 from typing import Optional
-from fastapi import APIRouter, Depends, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, BackgroundTasks, Query, Request, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
@@ -13,7 +16,6 @@ from datetime import datetime
 from services.gemini_service import GeminiService
 from agents.spend_profiler import SpendProfiler
 from models import User
-from fastapi import Request, HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +64,112 @@ async def sync_insights(background_tasks: BackgroundTasks, user: User = Depends(
     background_tasks.add_task(run_extraction, str(user.id))
     return {"status": "processing", "message": "Extraction pipeline started"}
 
+@router.get("/sync/stream")
+async def sync_stream(request: Request, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    queue = asyncio.Queue()
+
+    async def on_mail_found(mail):
+        await queue.put({
+            "event": "mail_found",
+            "data": mail
+        })
+
+    async def run_graph():
+        await queue.put({
+            "event": "processing_started",
+            "data": {"message": "Fetching mails..."}
+        })
+        try:
+            initial_state = {
+                "user_id": str(user.id),
+                "next_page_token": None,
+                "current_message_ids": [],
+                "current_emails": [],
+                "current_classifications": [],
+                "current_financial_emails": [],
+                "financial_emails": [],
+                "extracted_transactions": [],
+                "validated_transactions": [],
+                "processed_email_count": 0,
+                "financial_email_count": 0,
+                "transaction_count": 0,
+                "errors": [],
+                "total_spending": 0.0,
+                "category_summary": {},
+                "merchant_summary": {},
+                "recurring_payments": [],
+                "anomalies": [],
+                "insights": [],
+                "sync_started_at": datetime.utcnow().isoformat(),
+                "sync_completed_at": None,
+            }
+            # Run graph in background, passing the callback via config
+            # using astream to emit node updates
+            final_state = initial_state.copy()
+            async for step in orchestrator.astream(
+                initial_state,
+                config={"configurable": {"on_mail_found": on_mail_found}}
+            ):
+                for node_name, node_output in step.items():
+                    # Update final_state with the new output so we have it at the end
+                    final_state.update(node_output)
+                    
+                    # Emit a node update event
+                    node_display_names = {
+                        "fetch_emails": "Fetched emails",
+                        "classify_emails": "Classified emails",
+                        "extract_transactions": "Extracted transactions",
+                        "validate_transactions": "Validated transactions",
+                        "deduplicate_transactions": "Deduplicated transactions",
+                        "persist_transactions": "Persisted transactions",
+                        "analyze_spending": "Analyzed spending",
+                        "detect_recurring": "Detected recurring payments",
+                        "detect_anomalies": "Detected anomalies",
+                        "generate_insights": "Generated AI insights",
+                    }
+                    display_name = node_display_names.get(node_name, f"Completed {node_name}")
+                    
+                    await queue.put({
+                        "event": "processing_started", # We reuse processing_started for status messages
+                        "data": {"message": f"{display_name}...", "node": node_name}
+                    })
+                    
+                    # Send node completed event with data so the frontend can populate the accordions
+                    await queue.put({
+                        "event": "node_completed",
+                        "data": {
+                            "node": node_name,
+                            "extracted_transactions": node_output.get("extracted_transactions", []) if node_name == "extract_transactions" else []
+                        }
+                    })
+
+            total_mails = final_state.get("processed_email_count", 0)
+            await queue.put({
+                "event": "processing_completed",
+                "data": {"total_mails": total_mails}
+            })
+        except Exception as e:
+            logger.error(f"Orchestrator pipeline failed in stream: {e}")
+            await queue.put({"event": "error", "data": str(e)})
+        finally:
+            await queue.put(None)  # Sentinel to end stream
+
+    # Start the graph execution
+    task = asyncio.create_task(run_graph())
+
+    async def event_generator():
+        while True:
+            msg = await queue.get()
+            if msg is None:
+                break
+            yield f"event: {msg['event']}\ndata: {json.dumps(msg['data'])}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 @router.get("/profile")
 async def get_profile(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     gemini_service = GeminiService()
-    llm = gemini_service.get_langchain_llm()
+    llm = gemini_service.get_openrouter_llm()
     profiler = SpendProfiler(llm)
     profile = await profiler.build_profile(str(user.id), db)
     return profile

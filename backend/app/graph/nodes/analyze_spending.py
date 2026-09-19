@@ -1,3 +1,4 @@
+import uuid
 from app.graph.state import SpendState
 from database import AsyncSessionLocal
 from models import Transaction
@@ -18,6 +19,7 @@ async def analyze_spending(state: SpendState) -> SpendState:
     Normalizes amounts to INR.
     """
     user_id = state.get("user_id")
+    uid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
     
     total_spending = 0.0
     category_summary = {}
@@ -33,9 +35,8 @@ async def analyze_spending(state: SpendState) -> SpendState:
                 Transaction.currency
             )
             .where(
-                Transaction.user_id == user_id,
-                Transaction.transaction_type.in_(["purchase", "bill", "payment", "subscription"]),
-                Transaction.status == "completed"
+                Transaction.user_id == uid,
+                Transaction.flagged == False
             )
         )
         
@@ -66,8 +67,9 @@ async def analyze_spending(state: SpendState) -> SpendState:
                 Transaction.currency
             )
             .where(
-                Transaction.user_id == user_id,
-                Transaction.transaction_type == "refund"
+                Transaction.user_id == uid,
+                Transaction.flagged == False,
+                Transaction.amount < 0
             )
         )
         for merchant, category, amount, currency in refund_query:

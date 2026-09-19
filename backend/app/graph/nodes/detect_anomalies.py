@@ -1,15 +1,22 @@
 from datetime import timedelta, datetime
+import uuid
+import logging
 from app.graph.state import SpendState
 from database import AsyncSessionLocal
 from models import Transaction
 from sqlalchemy.future import select
 from sqlalchemy import func
 
+logger = logging.getLogger(__name__)
+
 async def detect_anomalies(state: SpendState) -> SpendState:
     """
     Deterministic anomaly detection (amount spikes, new merchants).
     """
+    logger.info("--- NODE: detect_anomalies START ---")
+    print("--- NODE: detect_anomalies START ---")
     user_id = state.get("user_id")
+    uid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
     anomalies = []
     
     async with AsyncSessionLocal() as session:
@@ -19,9 +26,8 @@ async def detect_anomalies(state: SpendState) -> SpendState:
         recent_query = await session.execute(
             select(Transaction)
             .where(
-                Transaction.user_id == user_id,
-                Transaction.date >= seven_days_ago,
-                Transaction.status == "completed"
+                Transaction.user_id == uid,
+                Transaction.date >= seven_days_ago
             )
         )
         recent_txs = recent_query.scalars().all()
@@ -37,11 +43,10 @@ async def detect_anomalies(state: SpendState) -> SpendState:
             baseline_query = await session.execute(
                 select(Transaction.amount)
                 .where(
-                    Transaction.user_id == user_id,
+                    Transaction.user_id == uid,
                     Transaction.merchant == tx.merchant,
                     Transaction.date >= ninety_days_ago,
-                    Transaction.id != tx.id,
-                    Transaction.status == "completed"
+                    Transaction.id != tx.id
                 )
             )
             historical_amounts = [float(a) for a in baseline_query.scalars().all() if a is not None]
@@ -65,7 +70,7 @@ async def detect_anomalies(state: SpendState) -> SpendState:
                     select(func.count())
                     .select_from(Transaction)
                     .where(
-                        Transaction.user_id == user_id,
+                        Transaction.user_id == uid,
                         Transaction.merchant == tx.merchant,
                         Transaction.id != tx.id
                     )

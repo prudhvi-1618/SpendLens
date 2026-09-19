@@ -1,6 +1,7 @@
+import uuid
 from app.graph.state import SpendState
 from database import AsyncSessionLocal
-from models import Transaction
+from models import Transaction, RawEmail
 from sqlalchemy.future import select
 
 async def deduplicate_transactions(state: SpendState) -> SpendState:
@@ -17,6 +18,8 @@ async def deduplicate_transactions(state: SpendState) -> SpendState:
         return state
         
     user_id = state.get("user_id")
+    if isinstance(user_id, str):
+        user_id = uuid.UUID(user_id)
     unique_transactions = []
     
     async with AsyncSessionLocal() as session:
@@ -28,13 +31,18 @@ async def deduplicate_transactions(state: SpendState) -> SpendState:
                 continue
                 
             # Check DB for duplicates from the EXACT SAME email with same merchant and amount
+            # We exclude the current tx (db_id) so we don't match the row we just inserted in extract_transactions
+            db_id = tx.get("db_id")
+            uid = uuid.UUID(db_id) if isinstance(db_id, str) else db_id
             query = await session.execute(
                 select(Transaction)
+                .join(RawEmail)
                 .where(
                     Transaction.user_id == user_id,
-                    Transaction.source_message_id == source_message_id,
+                    RawEmail.gmail_message_id == source_message_id,
                     Transaction.merchant == tx["merchant"],
-                    Transaction.amount == tx["amount"]
+                    Transaction.amount == tx["amount"],
+                    Transaction.id != uid
                 )
             )
             existing = query.scalars().first()

@@ -4,10 +4,11 @@ from app.graph.state import SpendState
 from database import AsyncSessionLocal
 from models import User
 from services.gmail_service import GmailService
+from langchain_core.runnables import RunnableConfig
 
 logger = logging.getLogger(__name__)
 
-async def fetch_emails(state: SpendState) -> SpendState:
+async def fetch_emails(state: SpendState, config: RunnableConfig) -> SpendState:
     """
     Fetch a batch of emails from Gmail API using the current page token.
     Updates the next_page_token and current_emails.
@@ -42,13 +43,37 @@ async def fetch_emails(state: SpendState) -> SpendState:
         await gmail_service.refresh_token_if_needed(user)
         
         # Fetch paginated batch
+        on_mail_found = config.get("configurable", {}).get("on_mail_found") if config else None
+        
         raw_emails, next_page_token = await gmail_service.fetch_financial_emails(
             months_back=1, 
-            page_token=page_token
+            page_token=page_token,
+            on_mail_found=on_mail_found
         )
         
         # Format as needed
         current_emails = []
+        from sqlalchemy.dialects.postgresql import insert
+        from models import RawEmail
+        
+        if raw_emails:
+            # We need to insert these raw_emails into the DB so extract_transactions can reference them
+            db_emails = []
+            for e in raw_emails:
+                # e.get("user_id") might be string, models expect UUID or string representation of UUID
+                db_emails.append({
+                    "user_id": user.id,
+                    "gmail_message_id": e["gmail_message_id"],
+                    "subject": e["subject"],
+                    "snippet": e["snippet"],
+                    "received_at": e["received_at"]
+                })
+            
+            stmt = insert(RawEmail).values(db_emails)
+            stmt = stmt.on_conflict_do_nothing(index_elements=['gmail_message_id'])
+            await session.execute(stmt)
+            await session.commit()
+            
         for e in raw_emails:
             current_emails.append({
                 "message_id": e["gmail_message_id"],

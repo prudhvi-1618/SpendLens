@@ -5,6 +5,7 @@ import DashboardPage from "./pages/DashboardPage";
 import AnomaliesPage from "./pages/AnomaliesPage";
 import TransactionsPage from "./pages/TransactionsPage";
 import LoadingSpinner from "./components/shared/LoadingSpinner";
+import { SyncProvider } from "./context/SyncContext";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -27,34 +28,36 @@ function ProtectedRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<ConnectPage />} />
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/anomalies" 
-          element={
-            <ProtectedRoute>
-              <AnomaliesPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/transactions" 
-          element={
-            <ProtectedRoute>
-              <TransactionsPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <SyncProvider>
+        <Routes>
+          <Route path="/" element={<ConnectPage />} />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/anomalies" 
+            element={
+              <ProtectedRoute>
+                <AnomaliesPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/transactions" 
+            element={
+              <ProtectedRoute>
+                <TransactionsPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </SyncProvider>
     </BrowserRouter>
   );
 }
