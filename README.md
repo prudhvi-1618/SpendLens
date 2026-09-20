@@ -56,7 +56,7 @@ graph TD
 ## Local setup
 ```bash
 # 1. Clone the repository and enter the directory
-git clone <repository_url>
+git clone https://github.com/prudhvi-1618/SpendLens/
 cd SpendLens
 
 # 2. Setup the backend
